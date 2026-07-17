@@ -5,44 +5,93 @@
  * channel : https://whatsapp.com/channel/0029Vb82nkLEwEjtLSQ49I44
  * support : follow my channel for more updates
  */
-async function convertYoutubeToMp3(youtubeUrl) {
+
+if (command === 'ytmp3v2') {
+    if (!args[0]) {
+        return message.reply(`┌˚₊ ๑│ s ʏ s ᴛ ᴇ ᴍ   ᴇ ʀ ʀ ᴏ ʀ │๑˚₊ ❌\n┇ Masukkan URL YouTube!\n│ *Contoh:* ${PREFIX}${command} https://youtu.be/dQw4w9WgXcQ\n└˚₊ ๑ ────────────── ๑˚₊\n> © ERINE-AI`);
+    }
+
+    const url = args[0];
+    const apikey = 'cuki-x';
+    const quality = '128'; 
+    const apiUrl = `https://api.cuki.biz.id/api/downloader/ytmp3?apikey=${apikey}&url=${encodeURIComponent(url)}&quality=${quality}`;
+
     try {
-        const inputEl = document.querySelector('input[name="url"]') || document.getElementById('url') || document.querySelector('input[type="text"]');
-        const buttonEl = document.querySelector('button[type="submit"]') || document.getElementById('search-btn') || document.querySelector('.btn-search');
+        await message.react('⏳');
+    } catch (err) {
+        console.log('Gagal memberikan reaksi emoji.');
+    }
 
-        if (!inputEl || !buttonEl) return;
+    try {
+        const { data } = await axios.get(apiUrl);
+        
+        console.log('=== RESPONSE API CUKI ===');
+        console.log(JSON.stringify(data, null, 2));
+        console.log('=========================');
 
-        inputEl.value = youtubeUrl;
-        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
-        inputEl.dispatchEvent(new Event('change', { bubbles: true }));
-        buttonEl.click();
-
-        let targetBtn = null;
-        for (let i = 0; i < 30; i++) {
-            await new Promise(resolve => setTimeout(resolve, 500));
-            targetBtn = document.getElementById('proceed_320') || document.getElementById('proceed_128');
-            if (targetBtn) break;
+        if (data.status !== true && data.success !== true) {
+            throw new Error(data.message || 'API merespon dengan kegagalan.');
         }
 
-        if (!targetBtn) return;
-        targetBtn.click();
+        const result = data.data || data;
+        const meta = result.metadata || result.meta;
+        const audio = result.audio || result;
 
-        const linkContainerId = targetBtn.id === 'proceed_320' ? 'mp3link_320' : 'mp3link_128';
-        const linkContainer = document.getElementById(linkContainerId);
-        if (!linkContainer) return;
-
-        let attempts = 0;
-        while (attempts < 45) {
-            attempts++;
-            await new Promise(resolve => setTimeout(resolve, 2000));
-
-            const anchor = linkContainer.querySelector('a.download-anchor');
-            if (anchor && anchor.href) {
-                window.location.href = anchor.href;
-                return anchor.href;
-            }
+        if (!meta || !audio) {
+            throw new Error('Struktur respons API berubah atau tidak sesuai. Cek terminal bot!');
         }
-    } catch (error) {
-        console.error(error);
+
+        const d = meta.duration || 0;
+        const minutes = Math.floor(d / 60);
+        const seconds = d % 60;
+        const formatDuration = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+
+        const embed = new EmbedBuilder()
+            .setColor('#FF0000')
+            .setTitle('🎵 ʏ ᴛ ᴍ ᴘ 3  ᴅ ᴏ ᴡ ɴ ʟ ᴏ ᴀ ᴅ ᴇ ʀ')
+            .addFields(
+                { name: '📌 Judul', value: meta.title || 'Tidak diketahui', inline: false },
+                { name: '⏱️ Durasi', value: formatDuration, inline: true },
+                { name: '🎧 Kualitas', value: audio.label || `${quality}kbps`, inline: true }
+            )
+            .setFooter({ text: '© ERINE-AI' })
+            .setTimestamp();
+
+        if (meta.thumbnail) {
+            embed.setThumbnail(meta.thumbnail);
+        }
+
+        const downloadUrl = audio.download?.downloadUrl || audio.downloadUrl || audio.link || audio.url;
+
+        if (!downloadUrl) {
+            throw new Error('Link unduhan audio tidak ditemukan dalam respons API.');
+        }
+
+        const audioAttachment = new AttachmentBuilder(downloadUrl, { 
+            name: `${meta.title || 'audio'}.mp3` 
+        });
+
+        await message.reply({
+            embeds: [embed],
+            files: [audioAttachment]
+        });
+
+        await message.reactions.removeAll().catch(() => null);
+        await message.react('✅').catch(() => null);
+
+    } catch (e) {
+        console.error(e);
+        const errorDetail = e.response?.data?.message || e.message;
+
+        const errorEmbed = new EmbedBuilder()
+            .setColor('#FF0000')
+            .setTitle('❌ s ʏ s ᴛ ᴇ ᴍ   ᴇ ʀ ʀ ᴏ ʀ')
+            .setDescription(`Gagal mengunduh audio.\n\n**Detail:** ${errorDetail}`)
+            .setFooter({ text: '© ERINE-AI' });
+
+        await message.reply({ embeds: [errorEmbed] });
+        
+        await message.reactions.removeAll().catch(() => null);
+        await message.react('❌').catch(() => null);
     }
 }
